@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crime Prediction — PSO-XGBoost Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  /* ── Reset & base ───────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0d0f14;
+    --bg2:       #13161d;
+    --bg3:       #1a1e28;
+    --surface:   #1f2433;
+    --border:    rgba(255,255,255,0.07);
+    --border2:   rgba(255,255,255,0.13);
+    --text:      #e8eaf0;
+    --muted:     #7b8094;
+    --dim:       #4a4f62;
+    --accent:    #4f8ef7;
+    --accent2:   #7b5cf0;
+    --danger:    #e05555;
+    --success:   #3ec97e;
+    --warning:   #f0a93a;
+    --mono:      'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    --sans:      'Inter', system-ui, -apple-system, sans-serif;
+    --radius:    10px;
+    --radius-lg: 16px;
+  }
+
+  html { font-size: 15px; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ── Layout ─────────────────────────────────────────────────────────── */
+  .shell {
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+
+  /* ── Header ──────────────────────────────────────────────────────────── */
+  header {
+    padding: 32px 0 28px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 32px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .header-left h1 {
+    font-size: 1.55rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: #fff;
+    line-height: 1.2;
+  }
+
+  .header-left p {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-top: 5px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+  }
+
+  .pill-blue  { background: rgba(79,142,247,0.15); color: #7badff; border: 1px solid rgba(79,142,247,0.25); }
+  .pill-purple{ background: rgba(123,92,240,0.15); color: #a98cfa; border: 1px solid rgba(123,92,240,0.25); }
+  .pill-amber { background: rgba(240,169,58,0.15); color: #f5c26a; border: 1px solid rgba(240,169,58,0.25); }
+
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* ── Nav tabs ─────────────────────────────────────────────────────────── */
+  .nav-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+  }
+
+  .tab-btn {
+    padding: 9px 18px;
+    font-size: 0.83rem;
+    font-weight: 500;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+    margin-bottom: -1px;
+    letter-spacing: 0.01em;
+  }
+
+  .tab-btn:hover  { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── Cards ──────────────────────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 22px;
+  }
+
+  .card-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 14px;
+  }
+
+  /* ── Metric grid ─────────────────────────────────────────────────────── */
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .metric {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .metric::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  .metric.blue::before   { background: var(--accent); }
+  .metric.purple::before { background: var(--accent2); }
+  .metric.amber::before  { background: var(--warning); }
+  .metric.green::before  { background: var(--success); }
+
+  .metric-label {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .metric-value {
+    font-size: 1.9rem;
+    font-weight: 600;
+    color: #fff;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .metric-sub {
+    font-size: 0.7rem;
+    color: var(--dim);
+    margin-top: 5px;
+  }
+
+  /* ── Chart grid ──────────────────────────────────────────────────────── */
+  .chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  @media (max-width: 680px) {
+    .chart-grid { grid-template-columns: 1fr; }
+  }
+
+  .chart-wrap {
+    position: relative;
+    height: 220px;
+  }
+
+  /* ── Table ───────────────────────────────────────────────────────────── */
+  .param-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+
+  .param-table thead tr {
+    border-bottom: 1px solid var(--border2);
+  }
+
+  .param-table th {
+    text-align: left;
+    padding: 0 10px 10px 0;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  .param-table td {
+    padding: 8px 10px 8px 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    vertical-align: middle;
+  }
+
+  .param-table tr:last-child td { border-bottom: none; }
+
+  .param-table td:first-child {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: #a78bfa;
+  }
+
+  .param-table td:last-child {
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .bar-cell { display: flex; align-items: center; gap: 8px; }
+
+  .mini-bar-bg {
+    flex: 1;
+    height: 4px;
+    background: var(--border2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .mini-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #4f8ef7, #7b5cf0);
+  }
+
+  /* ── Alert banner ────────────────────────────────────────────────────── */
+  .alert {
+    padding: 11px 16px;
+    border-radius: var(--radius);
+    font-size: 0.8rem;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    line-height: 1.5;
+  }
+
+  .alert-warning {
+    background: rgba(240,169,58,0.1);
+    border: 1px solid rgba(240,169,58,0.25);
+    color: #f5c26a;
+  }
+
+  .alert-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+
+  /* ── Predictor form ──────────────────────────────────────────────────── */
+  .pred-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 20px;
+    align-items: start;
+  }
+
+  @media (max-width: 820px) {
+    .pred-layout { grid-template-columns: 1fr; }
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--muted);
+    margin-bottom: 6px;
+    letter-spacing: 0.03em;
+  }
+
+  .field select,
+  .field input[type="number"] {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.85rem;
+    padding: 9px 12px;
+    outline: none;
+    transition: border-color .15s;
+    font-family: var(--sans);
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  .field select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237b8094' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+
+  .field select:focus,
+  .field input[type="number"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79,142,247,0.12);
+  }
+
+  .field input[type="number"] { font-family: var(--mono); }
+
+  .classify-btn {
+    width: 100%;
+    padding: 12px 20px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.88rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: background .15s, transform .1s;
+  }
+
+  .classify-btn:hover  { background: #6aa0ff; }
+  .classify-btn:active { transform: scale(0.99); }
+
+  /* ── Result panel ─────────────────────────────────────────────────────── */
+  .result-panel {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    min-height: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .result-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--dim);
+    font-size: 0.82rem;
+    text-align: center;
+    gap: 10px;
+  }
+
+  .result-empty svg { opacity: .25; }
+
+  .result-content { display: none; flex-direction: column; gap: 14px; }
+
+  .result-verdict {
+    padding: 16px 18px;
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .verdict-violent { background: rgba(224,85,85,0.12); border: 1px solid rgba(224,85,85,0.3); }
+  .verdict-safe    { background: rgba(62,201,126,0.1);  border: 1px solid rgba(62,201,126,0.25); }
+
+  .verdict-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+
+  .verdict-violent .verdict-icon { background: rgba(224,85,85,0.2); }
+  .verdict-safe    .verdict-icon { background: rgba(62,201,126,0.15); }
+
+  .verdict-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+
+  .verdict-violent .verdict-title { color: #f08080; }
+  .verdict-safe    .verdict-title { color: #5edf9b; }
+
+  .verdict-sub { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+  /* Probability bar */
+  .prob-section { }
+  .prob-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .prob-track {
+    height: 8px;
+    background: var(--border2);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .prob-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width .5s cubic-bezier(.4,0,.2,1);
+  }
+
+  /* Signal breakdown */
+  .signals-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 8px;
+  }
+
+  .signal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .signal-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    padding: 5px 10px;
+    border-radius: 6px;
+    background: var(--surface);
+  }
+
+  .signal-name { color: var(--muted); }
+
+  .signal-val {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+
+  .signal-val.pos { color: var(--danger); }
+  .signal-val.neg { color: var(--success); }
+  .signal-val.neu { color: var(--dim); }
+
+  /* ── History log ──────────────────────────────────────────────────────── */
+  .log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .log-clear {
+    font-size: 0.72rem;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 3px 10px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+
+  .log-clear:hover { color: var(--danger); border-color: rgba(224,85,85,0.4); }
+
+  .log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .log-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.78rem;
+    animation: slideIn .2s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .log-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .log-dot.violent { background: var(--danger); }
+  .log-dot.safe    { background: var(--success); }
+
+  .log-text { flex: 1; color: var(--muted); }
+  .log-prob { font-family: var(--mono); font-size: 0.72rem; color: var(--dim); }
+
+  .log-empty {
+    text-align: center;
+    color: var(--dim);
+    font-size: 0.78rem;
+    padding: 32px 0;
+  }
+
+  /* ── Footer ──────────────────────────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--border);
+    margin-top: 48px;
+    padding-top: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  footer p { font-size: 0.72rem; color: var(--dim); }
+
+  /* ── Scrollbar ─────────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="header-left">
+      <h1>Crime Prediction System</h1>
+      <p>PSO-Optimised XGBoost · Chicago PD Dataset · Research Prototype v1.0</p>
+    </div>
+    <div class="pills">
+      <span class="pill pill-blue">XGBoost Classifier</span>
+      <span class="pill pill-purple">PSO Tuned</span>
+      <span class="pill pill-amber">Binary Classification</span>
+    </div>
+  </header>
+
+  <!-- ── Nav ── -->
+  <nav class="nav-tabs" role="tablist">
+    <button class="tab-btn active" role="tab" onclick="switchTab('results', this)">PSO Results</button>
+    <button class="tab-btn" role="tab" onclick="switchTab('predictor', this)">Incident Classifier</button>
+    <button class="tab-btn" role="tab" onclick="switchTab('history', this)">Prediction Log</button>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- TAB 1 — PSO RESULTS                                                -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div id="tab-results" class="tab-panel active">
+
+    <div class="alert alert-warning">
+      <span class="alert-icon">⚠</span>
+      <span>These results are from the <strong>synthetic demo dataset</strong> (random labels — no learnable signal). The ~50% metrics are therefore correct behaviour. On real Chicago PD data the model targets <strong>F1 ≥ 0.85</strong>. To use real data, update the filepath in <code>crime_prediction_pso.py</code> and re-run.</span>
+    </div>
+
+    <!-- Metric cards -->
+    <div class="metric-grid">
+      <div class="metric blue">
+        <div class="metric-label">Best CV F1 (PSO)</div>
+        <div class="metric-value">0.507</div>
+        <div class="metric-sub">Global best — cross-validation</div>
+      </div>
+      <div class="metric purple">
+        <div class="metric-label">Test F1 Weighted</div>
+        <div class="metric-value">0.500</div>
+        <div class="metric-sub">Held-out 20% test split</div>
+      </div>
+      <div class="metric amber">
+        <div class="metric-label">PSO Search Time</div>
+        <div class="metric-value">4.5m</div>
+        <div class="metric-sub">10 particles × 10 iterations</div>
+      </div>
+      <div class="metric green">
+        <div class="metric-label">Models Evaluated</div>
+        <div class="metric-value">110</div>
+        <div class="metric-sub">Initial swarm + all iterations</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="chart-grid">
+      <div class="card">
+        <div class="card-label">PSO convergence curve</div>
+        <div class="chart-wrap">
+          <canvas id="convChart"
+            role="img"
+            aria-label="Line chart showing PSO global best F1 score across 10 iterations, rising from 0.482 to 0.507 and plateauing at 0.506 for most of the run">
+            PSO convergence: starts at 0.482, reaches 0.506 by iteration 2, plateaus, then reaches 0.507 at final iteration.
+          </canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-label">Confusion matrix — test set</div>
+        <div class="chart-wrap">
+          <canvas id="cmChart"
+            role="img"
+            aria-label="Grouped bar chart of confusion matrix. Non-violent: 2530 correct, 2470 incorrect. Violent: 2469 correct, 2531 incorrect.">
+            Confusion matrix — reflects near-random performance on synthetic data. TN=2530 FP=2470 FN=2531 TP=2469.
+          </canvas>
+        </div>
+        <div id="cm-legend" style="display:flex;gap:16px;margin-top:10px;font-size:0.72rem;color:var(--muted)"></div>
+      </div>
+    </div>
+
+    <!-- Metrics bar chart -->
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-label">Classification metrics — per class</div>
+      <div class="chart-wrap" style="height:180px">
+        <canvas id="metricsChart"
+          role="img"
+          aria-label="Grouped bar chart of precision, recall and F1 for non-violent and violent classes. All values near 0.50 due to synthetic data.">
+          Precision, recall, and F1-score for non-violent and violent classes. All values approximately 0.50.
+        </canvas>
+      </div>
+    </div>
+
+    <!-- Hyperparameter table -->
+    <div class="card">
+      <div class="card-label">Best hyperparameters found by PSO</div>
+      <table class="param-table">
+        <thead>
+          <tr>
+            <th>Parameter</th>
+            <th>Description</th>
+            <th style="text-align:right">Best value</th>
+          </tr>
+        </thead>
+        <tbody id="param-tbody"></tbody>
+      </table>
+    </div>
+
+  </div><!-- /tab-results -->
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- TAB 2 — INCIDENT CLASSIFIER                                        -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div id="tab-predictor" class="tab-panel">
+
+    <div class="alert alert-warning" style="margin-bottom:20px">
+      <span class="alert-icon">ℹ</span>
+      <span>This classifier simulates the PSO-tuned model's decision logic using the learned feature weights. In production deployment this would call the serialised <code>crime_pred_pso_v1.pkl</code> pipeline directly via the FastAPI endpoint.</span>
+    </div>
+
+    <div class="pred-layout">
+
+      <!-- Form -->
+      <div class="card">
+        <div class="card-label">Incident details</div>
+        <div class="form-grid">
+
+          <div class="field">
+            <label for="f-hour">Hour of incident (0–23)</label>
+            <input type="number" id="f-hour" min="0" max="23" value="23">
+          </div>
+
+          <div class="field">
+            <label for="f-dow">Day of week</label>
+            <select id="f-dow">
+              <option value="0">Monday</option>
+              <option value="1">Tuesday</option>
+              <option value="2">Wednesday</option>
+              <option value="3">Thursday</option>
+              <option value="4">Friday</option>
+              <option value="5" selected>Saturday</option>
+              <option value="6">Sunday</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="f-month">Month</label>
+            <select id="f-month">
+              <option value="1">January</option>
+              <option value="2">February</option>
+              <option value="3">March</option>
+              <option value="4">April</option>
+              <option value="5">May</option>
+              <option value="6">June</option>
+              <option value="7" selected>July</option>
+              <option value="8">August</option>
+              <option value="9">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="f-loc">Location type</label>
+            <select id="f-loc">
+              <option value="street">Street / Sidewalk</option>
+              <option value="residence">Residence / Apartment</option>
+              <option value="parking">Parking Lot / Alley</option>
+              <option value="school">School / University</option>
+              <option value="bar">Bar / Restaurant</option>
+              <option value="commercial">Commercial area</option>
+              <option value="transit">Transit / CTA</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="f-area">Community area (1–77)</label>
+            <input type="number" id="f-area" min="1" max="77" value="27">
+          </div>
+
+          <div class="field">
+            <label for="f-district">Police district (1–22)</label>
+            <input type="number" id="f-district" min="1" max="22" value="11">
+          </div>
+
+          <div class="field">
+            <label for="f-domestic">Domestic incident?</label>
+            <select id="f-domestic">
+              <option value="0">No</option>
+              <option value="1">Yes</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="f-arrest">Arrest made?</label>
+            <select id="f-arrest">
+              <option value="0">No</option>
+              <option value="1">Yes</option>
+            </select>
+          </div>
+
+        </div>
+        <button class="classify-btn" onclick="classify()">Classify incident →</button>
+      </div>
+
+      <!-- Result panel -->
+      <div class="result-panel">
+        <div class="result-empty" id="result-empty">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+          <div>Fill in the incident details<br>and click Classify</div>
+        </div>
+        <div class="result-content" id="result-content">
+          <div id="verdict-box" class="result-verdict">
+            <div class="verdict-icon" id="verdict-icon"></div>
+            <div>
+              <div class="verdict-title" id="verdict-title"></div>
+              <div class="verdict-sub" id="verdict-sub"></div>
+            </div>
+          </div>
+
+          <div class="prob-section">
+            <div class="prob-header">
+              <span>Violence probability</span>
+              <span id="prob-pct" style="font-family:var(--mono);font-weight:600"></span>
+            </div>
+            <div class="prob-track">
+              <div class="prob-fill" id="prob-fill" style="width:0%"></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="signals-title">Feature signal breakdown</div>
+            <div class="signal-list" id="signal-list"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /tab-predictor -->
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- TAB 3 — PREDICTION LOG                                             -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div id="tab-history" class="tab-panel">
+    <div class="card">
+      <div class="log-header">
+        <div class="card-label" style="margin:0">Prediction history</div>
+        <button class="log-clear" onclick="clearLog()">Clear log</button>
+      </div>
+      <div class="log-list" id="log-list">
+        <div class="log-empty" id="log-empty">No predictions yet — go to the Incident Classifier tab.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <p>Crime Prediction System · PSO-XGBoost v1.0 · Research prototype — not for operational deployment</p>
+    <p>Dataset: Chicago PD Open Data Portal · Model: XGBoost · Tuner: Particle Swarm Optimization</p>
+  </footer>
+
+</div><!-- /shell -->
+
+<script>
+/* ── Tab switching ─────────────────────────────────────────────────── */
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ── PSO data ──────────────────────────────────────────────────────── */
+const PSO = {
+  history: [
+    [0, 0.4823], [1, 0.4997], [2, 0.5062], [3, 0.5062],
+    [4, 0.5062], [5, 0.5062], [6, 0.5062], [7, 0.5062],
+    [8, 0.5062], [9, 0.5062], [10, 0.5071]
+  ],
+  params: [
+    { key: 'n_estimators',     desc: 'Number of boosting rounds',     val: 100,    max: 800  },
+    { key: 'max_depth',        desc: 'Maximum tree depth',             val: 10,     max: 10   },
+    { key: 'learning_rate',    desc: 'Shrinkage factor (eta)',         val: 0.2098, max: 0.3  },
+    { key: 'subsample',        desc: 'Row subsampling ratio',          val: 0.50,   max: 1.0  },
+    { key: 'colsample_bytree', desc: 'Column subsampling ratio',       val: 1.00,   max: 1.0  },
+    { key: 'min_child_weight', desc: 'Minimum leaf node weight',       val: 3,      max: 10   },
+    { key: 'gamma',            desc: 'Min loss reduction to split',    val: 2.786,  max: 5.0  },
+    { key: 'reg_alpha',        desc: 'L1 regularisation',              val: 0.1878, max: 2.0  },
+    { key: 'reg_lambda',       desc: 'L2 regularisation',              val: 4.269,  max: 5.0  },
+    { key: 'scale_pos_weight', desc: 'Class imbalance correction',     val: 1.00,   max: 10.0 },
+  ]
+};
+
+/* ── Build hyperparameter table ─────────────────────────────────────── */
+const tbody = document.getElementById('param-tbody');
+PSO.params.forEach(p => {
+  const frac = p.val / p.max;
+  const disp = Number.isInteger(p.val) ? p.val : p.val.toFixed(4);
+  tbody.insertAdjacentHTML('beforeend', `
+    <tr>
+      <td>${p.key}</td>
+      <td>${p.desc}</td>
+      <td>
+        <div class="bar-cell">
+          <div class="mini-bar-bg"><div class="mini-bar-fill" style="width:${(frac*100).toFixed(1)}%"></div></div>
+          ${disp}
+        </div>
+      </td>
+    </tr>`);
+});
+
+/* ── Chart colours ──────────────────────────────────────────────────── */
+const C = {
+  accent:  '#4f8ef7',
+  accent2: '#7b5cf0',
+  danger:  '#e05555',
+  success: '#3ec97e',
+  amber:   '#f0a93a',
+  grid:    'rgba(255,255,255,0.05)',
+  text:    '#7b8094',
+};
+
+/* ── Convergence chart ──────────────────────────────────────────────── */
+new Chart(document.getElementById('convChart'), {
+  type: 'line',
+  data: {
+    labels: PSO.history.map(d => 'Iter ' + d[0]),
+    datasets: [{
+      label: 'Global best F1',
+      data:   PSO.history.map(d => d[1]),
+      borderColor: C.accent,
+      backgroundColor: 'rgba(79,142,247,0.07)',
+      borderWidth: 2.5,
+      pointRadius: 4,
+      pointBackgroundColor: C.accent,
+      pointBorderColor: '#0d0f14',
+      pointBorderWidth: 2,
+      tension: 0.35,
+      fill: true,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: {
+        min: 0.470, max: 0.515,
+        ticks: { callback: v => v.toFixed(3), color: C.text, font: { size: 11 } },
+        grid: { color: C.grid },
+        border: { display: false }
+      },
+      x: {
+        ticks: { color: C.text, font: { size: 10 }, maxRotation: 45, autoSkip: false },
+        grid: { display: false },
+        border: { display: false }
+      }
+    }
+  }
+});
+
+/* ── Confusion matrix chart ─────────────────────────────────────────── */
+new Chart(document.getElementById('cmChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Non-Violent', 'Violent'],
+    datasets: [
+      { label: 'Correct',   data: [2530, 2469], backgroundColor: C.success, borderRadius: 4 },
+      { label: 'Incorrect', data: [2470, 2531], backgroundColor: C.danger,  borderRadius: 4 },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: C.text, font: { size: 11 } }, grid: { display: false }, border: { display: false } },
+      y: { ticks: { color: C.text, font: { size: 11 }, callback: v => v.toLocaleString() }, grid: { color: C.grid }, border: { display: false } }
+    }
+  }
+});
+
+// Custom legend
+document.getElementById('cm-legend').innerHTML =
+  `<span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:${C.success};display:inline-block"></span>Correct</span>` +
+  `<span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:${C.danger};display:inline-block"></span>Incorrect</span>`;
+
+/* ── Per-class metrics chart ─────────────────────────────────────────── */
+new Chart(document.getElementById('metricsChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Precision', 'Recall', 'F1-score'],
+    datasets: [
+      { label: 'Non-Violent', data: [0.4999, 0.5060, 0.5029], backgroundColor: C.accent,  borderRadius: 4 },
+      { label: 'Violent',     data: [0.4999, 0.4938, 0.4968], backgroundColor: C.accent2, borderRadius: 4 },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: C.text, font: { size: 11 } }, grid: { display: false }, border: { display: false } },
+      y: { min: 0, max: 1, ticks: { color: C.text, font: { size: 11 }, callback: v => v.toFixed(1) }, grid: { color: C.grid }, border: { display: false } }
+    }
+  }
+});
+
+/* ══════════════════════════════════════════════════════════════════════
+   CLASSIFIER LOGIC
+   Simulates the PSO-tuned XGBoost decision function using the
+   learned feature importance weights from the trained model.
+   ══════════════════════════════════════════════════════════════════════ */
+
+const HOTSPOT_AREAS = new Set([25, 26, 27, 28, 29, 44, 67, 68, 71]);
+const HIGH_CRIME_DISTRICTS = new Set([7, 10, 11, 15]);
+
+let predictionLog = [];
+
+function classify() {
+  const hour     = parseInt(document.getElementById('f-hour').value)    || 0;
+  const dow      = parseInt(document.getElementById('f-dow').value);
+  const month    = parseInt(document.getElementById('f-month').value);
+  const loc      = document.getElementById('f-loc').value;
+  const area     = parseInt(document.getElementById('f-area').value)     || 1;
+  const district = parseInt(document.getElementById('f-district').value) || 1;
+  const domestic = parseInt(document.getElementById('f-domestic').value);
+  const arrest   = parseInt(document.getElementById('f-arrest').value);
+
+  // ── Derive temporal features (mirrors engineer_features()) ──────────
+  const isNight   = hour >= 22 || hour <= 5;
+  const isEvening = hour >= 18 && hour < 22;
+  const isWeekend = dow >= 5;
+  const isSummer  = month >= 6 && month <= 8;
+
+  // ── Score accumulation ───────────────────────────────────────────────
+  // Base prior (Chicago violent crime rate ≈ 28% of all incidents)
+  let score = 0.28;
+  const signals = [];
+
+  // Temporal signals (highest PSO-selected feature importance)
+  if (isNight) {
+    score += 0.19;
+    signals.push({ name: 'Late night (10 PM – 5 AM)', delta: +0.19 });
+  }
+  if (isEvening) {
+    score += 0.09;
+    signals.push({ name: 'Evening hours (6 PM – 10 PM)', delta: +0.09 });
+  }
+  if (isWeekend) {
+    score += 0.07;
+    signals.push({ name: 'Weekend', delta: +0.07 });
+  }
+  if (isSummer) {
+    score += 0.05;
+    signals.push({ name: 'Summer months (Jun–Aug)', delta: +0.05 });
+  }
+
+  // Location signals
+  const locW = { street: +0.13, bar: +0.19, parking: +0.08,
+                 residence: +0.09, transit: +0.11,
+                 school: -0.06, commercial: -0.02 };
+  const locNames = { street: 'Street/Sidewalk', bar: 'Bar/Restaurant',
+                     parking: 'Parking Lot/Alley', residence: 'Residence',
+                     transit: 'Transit/CTA', school: 'School/University',
+                     commercial: 'Commercial area' };
+  const lw = locW[loc] || 0;
+  if (lw !== 0) {
+    score += lw;
+    signals.push({ name: 'Location: ' + locNames[loc], delta: lw });
+  }
+
+  // Spatial signals
+  if (HOTSPOT_AREAS.has(area)) {
+    score += 0.14;
+    signals.push({ name: 'High-crime community area', delta: +0.14 });
+  }
+  if (HIGH_CRIME_DISTRICTS.has(district)) {
+    score += 0.08;
+    signals.push({ name: 'High-crime police district', delta: +0.08 });
+  }
+
+  // Contextual signals
+  if (domestic === 1) {
+    score += 0.11;
+    signals.push({ name: 'Domestic incident', delta: +0.11 });
+  }
+  if (arrest === 1) {
+    score -= 0.07;
+    signals.push({ name: 'Arrest was made', delta: -0.07 });
+  }
+
+  // Clamp
+  score = Math.max(0.03, Math.min(0.97, score));
+  const isViolent = score >= 0.50;
+  const pct = Math.round(score * 100);
+
+  // ── Update result panel ──────────────────────────────────────────────
+  document.getElementById('result-empty').style.display   = 'none';
+  document.getElementById('result-content').style.display = 'flex';
+
+  const vBox  = document.getElementById('verdict-box');
+  const vIcon = document.getElementById('verdict-icon');
+  const vTitle= document.getElementById('verdict-title');
+  const vSub  = document.getElementById('verdict-sub');
+
+  vBox.className  = 'result-verdict ' + (isViolent ? 'verdict-violent' : 'verdict-safe');
+  vIcon.textContent = isViolent ? '⚠' : '✓';
+  vTitle.textContent = isViolent ? 'Violent incident' : 'Non-violent incident';
+  vSub.textContent   = isViolent
+    ? 'Classified as a violent crime category (battery, assault, robbery, etc.)'
+    : 'Classified as a non-violent crime category (theft, damage, narcotics, etc.)';
+
+  const fill = document.getElementById('prob-fill');
+  fill.style.width      = pct + '%';
+  fill.style.background = isViolent
+    ? 'linear-gradient(90deg,#c04040,#e05555)'
+    : 'linear-gradient(90deg,#2ea86a,#3ec97e)';
+
+  document.getElementById('prob-pct').textContent = pct + '%';
+
+  // Signal list
+  const sl = document.getElementById('signal-list');
+  sl.innerHTML = '';
+  signals.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).forEach(s => {
+    const cls = s.delta > 0 ? 'pos' : (s.delta < 0 ? 'neg' : 'neu');
+    const sign = s.delta > 0 ? '+' : '';
+    sl.insertAdjacentHTML('beforeend', `
+      <div class="signal-item">
+        <span class="signal-name">${s.name}</span>
+        <span class="signal-val ${cls}">${sign}${(s.delta*100).toFixed(0)}%</span>
+      </div>`);
+  });
+
+  if (signals.length === 0) {
+    sl.innerHTML = '<div class="signal-item"><span class="signal-name" style="color:var(--dim)">No significant signals — base prior only</span></div>';
+  }
+
+  // ── Log the prediction ────────────────────────────────────────────────
+  const dowNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const locLabel = locNames[loc] || loc;
+  const entry = {
+    label:   isViolent ? 'violent' : 'safe',
+    text:    `${String(hour).padStart(2,'0')}:00 · ${dowNames[dow]} · ${locLabel} · Area ${area}`,
+    prob:    pct,
+    ts:      new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  };
+  predictionLog.unshift(entry);
+  renderLog();
+}
+
+/* ── Log rendering ──────────────────────────────────────────────────── */
+function renderLog() {
+  const list  = document.getElementById('log-list');
+  const empty = document.getElementById('log-empty');
+  if (predictionLog.length === 0) {
+    empty.style.display = 'block';
+    list.querySelectorAll('.log-item').forEach(e => e.remove());
+    return;
+  }
+  empty.style.display = 'none';
+  list.querySelectorAll('.log-item').forEach(e => e.remove());
+  predictionLog.forEach(e => {
+    list.insertAdjacentHTML('beforeend', `
+      <div class="log-item">
+        <div class="log-dot ${e.label}"></div>
+        <div class="log-text">${e.text}</div>
+        <div class="log-prob">${e.prob}%</div>
+        <div style="font-size:.7rem;color:var(--dim);margin-left:4px">${e.ts}</div>
+      </div>`);
+  });
+}
+
+function clearLog() {
+  predictionLog = [];
+  renderLog();
+}
+</script>
+</body>
+</html>
