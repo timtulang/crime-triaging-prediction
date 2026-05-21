@@ -9,3 +9,10 @@ Important notes:
 We pivoted from a model that predicts where a crime might appear to a triaging approach. This is done for better resource allocation.
 
 Say a report is predicted to be NON-VIOLENT; authorities can allocate less manpower in that area. The opposite is true for VIOLENT crimes.
+
+
+HOW TO RUN:
+- CD to this project folder.
+- Run "pip install -r requirements.txt" to install dependencies
+- Run "uvicorn server:app --reload"
+- Run html file using "live server" extension in VS Code

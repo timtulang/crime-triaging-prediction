@@ -593,33 +593,21 @@
   <!-- ═══════════════════════════════════════════════════════════════════ -->
   <div id="tab-results" class="tab-panel active">
 
-    <div class="alert alert-warning">
-      <span class="alert-icon">⚠</span>
-      <span>These results are from the <strong>synthetic demo dataset</strong> (random labels — no learnable signal). The ~50% metrics are therefore correct behaviour. On real Chicago PD data the model targets <strong>F1 ≥ 0.85</strong>. To use real data, update the filepath in <code>crime_prediction_pso.py</code> and re-run.</span>
-    </div>
-
     <!-- Metric cards -->
     <div class="metric-grid">
-      <div class="metric blue">
+    <div class="metric blue">
         <div class="metric-label">Best CV F1 (PSO)</div>
-        <div class="metric-value">0.507</div>
-        <div class="metric-sub">Global best — cross-validation</div>
-      </div>
-      <div class="metric purple">
+        <div class="metric-value" id="metric-cv">--</div> 
+    </div>
+    <div class="metric purple">
         <div class="metric-label">Test F1 Weighted</div>
-        <div class="metric-value">0.500</div>
-        <div class="metric-sub">Held-out 20% test split</div>
-      </div>
-      <div class="metric amber">
+        <div class="metric-value" id="metric-test">--</div>
+    </div>
+    <div class="metric amber">
         <div class="metric-label">PSO Search Time</div>
-        <div class="metric-value">4.5m</div>
-        <div class="metric-sub">10 particles × 10 iterations</div>
-      </div>
-      <div class="metric green">
-        <div class="metric-label">Models Evaluated</div>
-        <div class="metric-value">110</div>
-        <div class="metric-sub">Initial swarm + all iterations</div>
-      </div>
+        <div class="metric-value" id="metric-time">--</div>
+    </div>
+    <!-- Keep the Models Evaluated metric as is, or give it an ID if you want to update it dynamically -->
     </div>
 
     <!-- Charts -->
@@ -681,11 +669,6 @@
   <!-- TAB 2 — INCIDENT CLASSIFIER                                        -->
   <!-- ═══════════════════════════════════════════════════════════════════ -->
   <div id="tab-predictor" class="tab-panel">
-
-    <div class="alert alert-warning" style="margin-bottom:20px">
-      <span class="alert-icon">ℹ</span>
-      <span>This classifier simulates the PSO-tuned model's decision logic using the learned feature weights. In production deployment this would call the serialised <code>crime_pred_pso_v1.pkl</code> pipeline directly via the FastAPI endpoint.</span>
-    </div>
 
     <div class="pred-layout">
 
@@ -833,6 +816,8 @@
 </div><!-- /shell -->
 
 <script>
+
+    
 /* ── Tab switching ─────────────────────────────────────────────────── */
 function switchTab(id, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -915,7 +900,6 @@ new Chart(document.getElementById('convChart'), {
     plugins: { legend: { display: false } },
     scales: {
       y: {
-        min: 0.470, max: 0.515,
         ticks: { callback: v => v.toFixed(3), color: C.text, font: { size: 11 } },
         grid: { color: C.grid },
         border: { display: false }
@@ -985,139 +969,139 @@ const HIGH_CRIME_DISTRICTS = new Set([7, 10, 11, 15]);
 
 let predictionLog = [];
 
-function classify() {
-  const hour     = parseInt(document.getElementById('f-hour').value)    || 0;
-  const dow      = parseInt(document.getElementById('f-dow').value);
-  const month    = parseInt(document.getElementById('f-month').value);
-  const loc      = document.getElementById('f-loc').value;
-  const area     = parseInt(document.getElementById('f-area').value)     || 1;
-  const district = parseInt(document.getElementById('f-district').value) || 1;
-  const domestic = parseInt(document.getElementById('f-domestic').value);
-  const arrest   = parseInt(document.getElementById('f-arrest').value);
-
-  // ── Derive temporal features (mirrors engineer_features()) ──────────
-  const isNight   = hour >= 22 || hour <= 5;
-  const isEvening = hour >= 18 && hour < 22;
-  const isWeekend = dow >= 5;
-  const isSummer  = month >= 6 && month <= 8;
-
-  // ── Score accumulation ───────────────────────────────────────────────
-  // Base prior (Chicago violent crime rate ≈ 28% of all incidents)
-  let score = 0.28;
-  const signals = [];
-
-  // Temporal signals (highest PSO-selected feature importance)
-  if (isNight) {
-    score += 0.19;
-    signals.push({ name: 'Late night (10 PM – 5 AM)', delta: +0.19 });
-  }
-  if (isEvening) {
-    score += 0.09;
-    signals.push({ name: 'Evening hours (6 PM – 10 PM)', delta: +0.09 });
-  }
-  if (isWeekend) {
-    score += 0.07;
-    signals.push({ name: 'Weekend', delta: +0.07 });
-  }
-  if (isSummer) {
-    score += 0.05;
-    signals.push({ name: 'Summer months (Jun–Aug)', delta: +0.05 });
-  }
-
-  // Location signals
-  const locW = { street: +0.13, bar: +0.19, parking: +0.08,
-                 residence: +0.09, transit: +0.11,
-                 school: -0.06, commercial: -0.02 };
-  const locNames = { street: 'Street/Sidewalk', bar: 'Bar/Restaurant',
-                     parking: 'Parking Lot/Alley', residence: 'Residence',
-                     transit: 'Transit/CTA', school: 'School/University',
-                     commercial: 'Commercial area' };
-  const lw = locW[loc] || 0;
-  if (lw !== 0) {
-    score += lw;
-    signals.push({ name: 'Location: ' + locNames[loc], delta: lw });
-  }
-
-  // Spatial signals
-  if (HOTSPOT_AREAS.has(area)) {
-    score += 0.14;
-    signals.push({ name: 'High-crime community area', delta: +0.14 });
-  }
-  if (HIGH_CRIME_DISTRICTS.has(district)) {
-    score += 0.08;
-    signals.push({ name: 'High-crime police district', delta: +0.08 });
-  }
-
-  // Contextual signals
-  if (domestic === 1) {
-    score += 0.11;
-    signals.push({ name: 'Domestic incident', delta: +0.11 });
-  }
-  if (arrest === 1) {
-    score -= 0.07;
-    signals.push({ name: 'Arrest was made', delta: -0.07 });
-  }
-
-  // Clamp
-  score = Math.max(0.03, Math.min(0.97, score));
-  const isViolent = score >= 0.50;
-  const pct = Math.round(score * 100);
-
-  // ── Update result panel ──────────────────────────────────────────────
-  document.getElementById('result-empty').style.display   = 'none';
-  document.getElementById('result-content').style.display = 'flex';
-
-  const vBox  = document.getElementById('verdict-box');
-  const vIcon = document.getElementById('verdict-icon');
-  const vTitle= document.getElementById('verdict-title');
-  const vSub  = document.getElementById('verdict-sub');
-
-  vBox.className  = 'result-verdict ' + (isViolent ? 'verdict-violent' : 'verdict-safe');
-  vIcon.textContent = isViolent ? '⚠' : '✓';
-  vTitle.textContent = isViolent ? 'Violent incident' : 'Non-violent incident';
-  vSub.textContent   = isViolent
-    ? 'Classified as a violent crime category (battery, assault, robbery, etc.)'
-    : 'Classified as a non-violent crime category (theft, damage, narcotics, etc.)';
-
-  const fill = document.getElementById('prob-fill');
-  fill.style.width      = pct + '%';
-  fill.style.background = isViolent
-    ? 'linear-gradient(90deg,#c04040,#e05555)'
-    : 'linear-gradient(90deg,#2ea86a,#3ec97e)';
-
-  document.getElementById('prob-pct').textContent = pct + '%';
-
-  // Signal list
-  const sl = document.getElementById('signal-list');
-  sl.innerHTML = '';
-  signals.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).forEach(s => {
-    const cls = s.delta > 0 ? 'pos' : (s.delta < 0 ? 'neg' : 'neu');
-    const sign = s.delta > 0 ? '+' : '';
-    sl.insertAdjacentHTML('beforeend', `
-      <div class="signal-item">
-        <span class="signal-name">${s.name}</span>
-        <span class="signal-val ${cls}">${sign}${(s.delta*100).toFixed(0)}%</span>
-      </div>`);
-  });
-
-  if (signals.length === 0) {
-    sl.innerHTML = '<div class="signal-item"><span class="signal-name" style="color:var(--dim)">No significant signals — base prior only</span></div>';
-  }
-
-  // ── Log the prediction ────────────────────────────────────────────────
-  const dowNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const locLabel = locNames[loc] || loc;
-  const entry = {
-    label:   isViolent ? 'violent' : 'safe',
-    text:    `${String(hour).padStart(2,'0')}:00 · ${dowNames[dow]} · ${locLabel} · Area ${area}`,
-    prob:    pct,
-    ts:      new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+async function classify() {
+  // 1. Gather data from the form
+  const payload = {
+    hour: parseInt(document.getElementById('f-hour').value) || 0,
+    dow: parseInt(document.getElementById('f-dow').value),
+    month: parseInt(document.getElementById('f-month').value),
+    loc: document.getElementById('f-loc').value,
+    area: parseInt(document.getElementById('f-area').value) || 1,
+    district: parseInt(document.getElementById('f-district').value) || 1,
+    domestic: parseInt(document.getElementById('f-domestic').value),
+    arrest: parseInt(document.getElementById('f-arrest').value)
   };
-  predictionLog.unshift(entry);
+
+  try {
+    // 2. Send to local Python backend
+    const response = await fetch('http://127.0.0.1:8000/api/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    const data = await response.json();
+    
+    // 3. Update the UI with the real prediction
+    const pct = Math.round(data.probability * 100);
+    const isViolent = data.is_violent;
+
+    document.getElementById('result-empty').style.display = 'none';
+    document.getElementById('result-content').style.display = 'flex';
+
+    const vBox = document.getElementById('verdict-box');
+    const vIcon = document.getElementById('verdict-icon');
+    const vTitle = document.getElementById('verdict-title');
+    const vSub = document.getElementById('verdict-sub');
+
+    vBox.className = 'result-verdict ' + (isViolent ? 'verdict-violent' : 'verdict-safe');
+    vIcon.textContent = isViolent ? '⚠' : '✓';
+    vTitle.textContent = isViolent ? 'Violent incident' : 'Non-violent incident';
+    vSub.textContent = isViolent
+      ? 'Classified as a violent crime category based on PSO-tuned XGBoost.'
+      : 'Classified as a non-violent crime category based on PSO-tuned XGBoost.';
+
+    const fill = document.getElementById('prob-fill');
+    fill.style.width = pct + '%';
+    fill.style.background = isViolent
+      ? 'linear-gradient(90deg,#c04040,#e05555)'
+      : 'linear-gradient(90deg,#2ea86a,#3ec97e)';
+
+    document.getElementById('prob-pct').textContent = pct + '%';
+    
+    // Optional: Log it
+    const entry = {
+      label: isViolent ? 'violent' : 'safe',
+      text: `Area ${payload.area} · Dist ${payload.district} · ${payload.loc}`,
+      prob: pct,
+      ts: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    predictionLog.unshift(entry);
+    renderLog();
+
+  } catch (error) {
+    console.error("Error calling prediction API:", error);
+    alert("Could not connect to the Python backend. Is the server running?");
+  }
+}
+
+async function loadRealMetrics() {
+  try {
+    const response = await fetch('http://127.0.0.1:8000/api/metrics');
+    const data = await response.json();
+
+    // 1. Update the top metric cards
+    document.getElementById('metric-cv').textContent = data.pso_best_cv_f1.toFixed(3);
+    document.getElementById('metric-test').textContent = data.test_metrics.f1_weighted.toFixed(3);
+    
+    const minutes = (data.elapsed_seconds / 60).toFixed(1);
+    document.getElementById('metric-time').textContent = minutes + 'm';
+
+    // 2. Rebuild the hyperparameter table
+    // We need descriptions and max values for the visual progress bars
+    const paramDefs = {
+      n_estimators:     { desc: 'Number of boosting rounds', max: 800 },
+      max_depth:        { desc: 'Maximum tree depth', max: 10 },
+      learning_rate:    { desc: 'Shrinkage factor (eta)', max: 0.3 },
+      subsample:        { desc: 'Row subsampling ratio', max: 1.0 },
+      colsample_bytree: { desc: 'Column subsampling ratio', max: 1.0 },
+      min_child_weight: { desc: 'Minimum leaf node weight', max: 10 },
+      gamma:            { desc: 'Min loss reduction to split', max: 5.0 },
+      reg_alpha:        { desc: 'L1 regularisation', max: 2.0 },
+      reg_lambda:       { desc: 'L2 regularisation', max: 5.0 },
+      scale_pos_weight: { desc: 'Class imbalance correction', max: 10.0 }
+    };
+
+    const tbody = document.getElementById('param-tbody');
+    tbody.innerHTML = ''; // Clear out the hardcoded rows
+
+    for (const [key, val] of Object.entries(data.best_hyperparameters)) {
+      const def = paramDefs[key] || { desc: 'Model parameter', max: val * 2 };
+      const frac = Math.min(val / def.max, 1.0); // Cap at 100% just in case
+      const disp = Number.isInteger(val) ? val : val.toFixed(4);
+      
+      tbody.insertAdjacentHTML('beforeend', `
+        <tr>
+          <td>${key}</td>
+          <td>${def.desc}</td>
+          <td>
+            <div class="bar-cell">
+              <div class="mini-bar-bg"><div class="mini-bar-fill" style="width:${(frac * 100).toFixed(1)}%"></div></div>
+              ${disp}
+            </div>
+          </td>
+        </tr>`);
+    }
+
+    // 3. Update the Convergence Chart
+    // data.pso_history looks like: [[1, 0.769], [2, 0.770], ...]
+    convChart.data.labels = data.pso_history.map(d => 'Iter ' + d[0]);
+    convChart.data.datasets[0].data = data.pso_history.map(d => d[1]);
+    convChart.update(); // Tells Chart.js to re-render
+
+  } catch (error) {
+    console.error("Failed to load metrics. Is the FastAPI server running?", error);
+  }
+}
+
+// Automatically run this function as soon as the page loads
+window.addEventListener('DOMContentLoaded', loadRealMetrics);
+
+function clearLog() {
+  predictionLog = [];
   renderLog();
 }
 
-/* ── Log rendering ──────────────────────────────────────────────────── */
 function renderLog() {
   const list  = document.getElementById('log-list');
   const empty = document.getElementById('log-empty');
@@ -1137,11 +1121,6 @@ function renderLog() {
         <div style="font-size:.7rem;color:var(--dim);margin-left:4px">${e.ts}</div>
       </div>`);
   });
-}
-
-function clearLog() {
-  predictionLog = [];
-  renderLog();
 }
 </script>
 </body>
