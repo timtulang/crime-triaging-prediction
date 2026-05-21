@@ -16,3 +16,7 @@ HOW TO RUN:
 - Run "pip install -r requirements.txt" to install dependencies
 - Run "uvicorn server:app --reload"
 - Run html file using "live server" extension in VS Code
+
+
+FOR CHRIS:
+nasa db yung results if u need images, pero yung pso_results.json naman if u need actual text file
